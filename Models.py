@@ -1,4 +1,5 @@
 import torch.nn as nn
+import torch
 from torchvision.models import vgg19
 
 
@@ -23,10 +24,8 @@ class ResidualBlock(nn.Module):
         super(ResidualBlock, self).__init__()
 
         conv_block = [nn.Conv2d(in_features, in_features, 3, 1, 1),
-                      nn.BatchNorm2d(in_features),
                       nn.ReLU(inplace=True),
-                      nn.Conv2d(in_features, in_features, 3, 1, 1),
-                      nn.BatchNorm2d(in_features)]
+                      nn.Conv2d(in_features, in_features, 3, 1, 1)]
         self.conv_block = nn.Sequential(*conv_block)
     def forward(self, x):
         return x + self.conv_block(x)
@@ -34,20 +33,20 @@ class ResidualBlock(nn.Module):
 
 
 class GeneratorResNet(nn.Module):
-    def __init__(self, in_channels=3, out_channels=3, n_residual_blocks=4):
+    def __init__(self, in_channels=3, out_channels=3, n_residual_blocks=10):
         super(GeneratorResNet, self).__init__()
 
         # First layer
         self.conv1 = nn.Sequential(
-            nn.Conv2d(in_channels, 32, 3, 1, 1),
+            nn.Conv2d(in_channels, 64, 7, 1, 3),
             nn.ReLU(inplace=True)
         )
         # Residual blocks
         res_blocks = []
         for _ in range(n_residual_blocks):
-            res_blocks.append(ResidualBlock(32))
+            res_blocks.append(ResidualBlock(64))
         self.res_blocks = nn.Sequential(*res_blocks)
-        self.conv2 = nn.Sequential(nn.Conv2d(32, out_channels, 3, 1, 1))
+        self.conv2 = nn.Sequential(nn.Conv2d(64, out_channels, 3, 1, 1))
 
     def forward(self, x):
         out1 = self.conv1(x)
@@ -59,32 +58,37 @@ class GeneratorResNet(nn.Module):
 class Discriminator(nn.Module):
     def __init__(self, in_channels=3):
         super(Discriminator, self).__init__()
-
-        def discriminator_block(in_filters, out_filters, stride, normalize):
-            """Returns layers of each discriminator block"""
-            layers = [nn.Conv2d(in_filters, out_filters, 3, stride, 1)]
-            if normalize:
-                layers.append(nn.BatchNorm2d(out_filters))
-            layers.append(nn.LeakyReLU(0.2, inplace=True))
-            return layers
-
-        layers = []
-        in_filters = in_channels
-        for out_filters, stride, normalize in [(64, 1, False),
-                                                (64, 2, True),
-                                                (128, 1, True),
-                                                (128, 2, True),
-                                                (256, 1, True),
-                                                (256, 2, True),
-                                                (512, 1, True),
-                                                (512, 2, True)]:
-            layers.extend(discriminator_block(in_filters, out_filters, stride, normalize))
-            in_filters = out_filters
-
-        # Output layer
-        layers.append(nn.Conv2d(out_filters, 1, 3, 1, 1))
-
-        self.model = nn.Sequential(*layers)
+        self.conv1 = nn.Sequential(
+            nn.Conv2d(in_channels, 32, 7, 2, 3),
+            nn.ReLU(inplace=True)
+        )
+        self.conv2 = nn.Sequential(
+            nn.Conv2d(32, 64, 3, 1, 3),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(3, 2),
+            ResidualBlock(64))
+        self.conv3 = nn.Sequential(
+            nn.Conv2d(64, 128, 3, 1, 3),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(3, 2),
+            ResidualBlock(128))
+        self.conv4 = nn.Sequential(
+            nn.Conv2d(128, 256, 3, 1, 3),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(3, 2),
+            ResidualBlock(256))
+        self.linear = nn.Sequential(
+            nn.Linear(256, 1),
+            nn.Sigmoid(),
+        )
 
     def forward(self, img):
-        return self.model(img)
+        conv1 = self.conv1(img)
+        conv2 = self.conv2(conv1)
+        conv3 = self.conv3(conv2)
+        conv4 = self.conv4(conv3)
+        output = torch.mean(torch.mean(conv4, -1), -1)
+        output2 = self.linear(output)
+        return output2
+
+
