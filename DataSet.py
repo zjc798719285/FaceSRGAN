@@ -15,10 +15,10 @@ class ImageDataset(Dataset):
         print('Begin Initializing')
         for file_i in self.files:
            image_hr = cv2.imread(file_i); (m, n, c) = np.shape(image_hr)
-           hr = (int(n / self.scales), int(m / self.scales))
-           lr = (int(n / self.scales / 2.5), int(m / self.scales / 2.5))
+           lr = (int(n / self.scales), int(m / self.scales))
+           hr = (int(n / self.scales)*4, int(m / self.scales)*4)
            image_hr = cv2.resize(image_hr, hr)
-           image_lr = cv2.resize(cv2.resize(image_hr, lr), hr)
+           image_lr = cv2.resize(image_hr, lr)
            image_hr = trf.ToTensor()(image_hr); image_lr = trf.ToTensor()(image_lr)
            image_hr = trf.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])(image_hr)
            image_lr = trf.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])(image_lr)

@@ -1,17 +1,39 @@
 import torch.nn as nn
 import torch
-from torchvision.models import vgg19
+from torchvision.models import resnet18, resnet
+
+# class MyRestnet(resnet):
+#     def __init__(self):
+#         super(MyRestnet, self).__init__()
+#
+#     def forward(self, x):
+#         x = self.conv1(x)
+#         x = self.bn1(x)
+#         x = self.relu(x)
+#         x = self.maxpool(x)
+#
+#         x = self.layer1(x)
+#         x = self.layer2(x)
+#         x = self.layer3(x)
+#         x = self.layer4(x)
+#
+#         x = self.avgpool(x)
+#         x = x.view(x.size(0), -1)
+#         x = self.fc(x)
+#
+#         return x
+
 
 
 
 class FeatureExtractor(nn.Module):
     def __init__(self):
         super(FeatureExtractor, self).__init__()
-
-        vgg19_model = vgg19(pretrained=True)
-
+        resnet = resnet18(pretrained=False)
+        resnet.load_state_dict(torch.load('E:\PROJECT\FaceSRGAN\checkpoint\\resnet18-5c106cde.pth'))
         # Extracts features at the 11th layer
-        self.feature_extractor = nn.Sequential(*list(vgg19_model.features.children())[:12])
+        ls = list(resnet.children())[:8]
+        self.feature_extractor = nn.Sequential(*list(resnet.children())[:7])
 
     def forward(self, img):
         out = self.feature_extractor(img)
@@ -33,26 +55,44 @@ class ResidualBlock(nn.Module):
 
 
 class GeneratorResNet(nn.Module):
-    def __init__(self, in_channels=3, out_channels=3, n_residual_blocks=10):
+    def __init__(self, in_channels=3, out_channels=3, n_residual_blocks=16):
         super(GeneratorResNet, self).__init__()
 
         # First layer
         self.conv1 = nn.Sequential(
-            nn.Conv2d(in_channels, 64, 7, 1, 3),
+            nn.Conv2d(in_channels, 64, 9, 1, 4),
             nn.ReLU(inplace=True)
         )
+
         # Residual blocks
         res_blocks = []
         for _ in range(n_residual_blocks):
             res_blocks.append(ResidualBlock(64))
         self.res_blocks = nn.Sequential(*res_blocks)
-        self.conv2 = nn.Sequential(nn.Conv2d(64, out_channels, 3, 1, 1))
+
+        # Second conv layer post residual blocks
+        self.conv2 = nn.Sequential(nn.Conv2d(64, 64, 3, 1, 1), nn.BatchNorm2d(64))
+
+        # Upsampling layers
+        upsampling = []
+        for out_features in range(2):
+            upsampling += [nn.Conv2d(64, 256, 3, 1, 1),
+                           nn.BatchNorm2d(256),
+                           nn.PixelShuffle(upscale_factor=2),
+                           nn.ReLU(inplace=True)]
+        self.upsampling = nn.Sequential(*upsampling)
+
+        # Final output layer
+        self.conv3 = nn.Sequential(nn.Conv2d(64, out_channels, 9, 1, 4), nn.Tanh())
 
     def forward(self, x):
         out1 = self.conv1(x)
         out = self.res_blocks(out1)
         out2 = self.conv2(out)
-        return out2
+        out = torch.add(out1, out2)
+        out = self.upsampling(out)
+        out = self.conv3(out)
+        return out
 
 
 class Discriminator(nn.Module):

@@ -4,7 +4,7 @@ import torch
 from ImageTransform import TensorToImage
 import cv2, os
 data_path = 'E:\PROJECT\FaceSRGAN\dataset\\'
-model_path = 'E:\PROJECT\FaceSRGAN\checkpoint\\generator2.pth'
+model_path = 'E:\PROJECT\FaceSRGAN\checkpoint\\generator0.pth'
 results = 'E:\PROJECT\FaceSRGAN\Result\\'
 
 dataloader = DataLoader(ImageDataset(data_path, 4), batch_size=1, shuffle=True, num_workers=0)
